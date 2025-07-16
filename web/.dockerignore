@@ -1,4 +1,12 @@
 node_modules
 .next
 .git
-Dockerfile 
+*.log
+.env
+.idea
+.vscode
+.DS_Store
+npm-debug.log
+dist
+build
+coverage 
