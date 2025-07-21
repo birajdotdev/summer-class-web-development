@@ -1,83 +1,116 @@
 services:
-  db:
-    image: mysql:8.0
-    container_name: db
-    restart: unless-stopped
-    environment:
-      MYSQL_ROOT_PASSWORD: rootpassword
-      MYSQL_DATABASE: appdb
-      MYSQL_USER: appuser
-      MYSQL_PASSWORD: apppass
-    ports:
-      - "3306:3306"
-    volumes:
-      - db_data:/var/lib/mysql
-    healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
-
-  phpmyadmin:
-    image: phpmyadmin/phpmyadmin
-    container_name: phpmyadmin
-    restart: unless-stopped
-    environment:
-      PMA_HOST: db
-      PMA_USER: root
-      PMA_PASSWORD: rootpassword
-    ports:
-      - "8080:80"
-    depends_on:
-      db:
-        condition: service_healthy
-
-  laravel:
-    build:
-      context: ./server
-    container_name: laravel
-    restart: unless-stopped
-    volumes:
-      - ./server:/var/www/html
-      - laravel_vendor:/var/www/html/vendor
-    depends_on:
-      db:
-        condition: service_healthy
-    environment:
-      DB_HOST: db
-      DB_DATABASE: appdb
-      DB_USERNAME: appuser
-      DB_PASSWORD: apppass
-    ports:
-      - "8000:8000"
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
   web:
     build:
       context: ./web
+      dockerfile: Dockerfile
     container_name: nextjs
-    restart: unless-stopped
     volumes:
       - ./web:/app
-      - web_node_modules:/app/node_modules
+      - /app/node_modules
+      - /app/.next
     ports:
       - "3000:3000"
     environment:
       NODE_ENV: development
-      CHOKIDAR_USEPOLLING: "true"
+      WATCHPACK_POLLING: true
+    networks:
+      - sail
     depends_on:
-      - laravel
+      server:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3000"]
-      interval: 10s
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    restart: unless-stopped
+
+  server:
+    build:
+      context: "./server/vendor/laravel/sail/runtimes/8.4"
+      dockerfile: Dockerfile
+      args:
+        WWWGROUP: "${WWWGROUP:-1000}"
+    container_name: laravel
+    image: "sail-8.4/app"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "${APP_PORT:-8000}:80"
+      - "${VITE_PORT:-5173}:${VITE_PORT:-5173}"
+    environment:
+      WWWUSER: "${WWWUSER:-1000}"
+      LARAVEL_SAIL: 1
+      XDEBUG_MODE: "${SAIL_XDEBUG_MODE:-off}"
+      XDEBUG_CONFIG: "${SAIL_XDEBUG_CONFIG:-client_host=host.docker.internal}"
+      IGNITION_LOCAL_SITES_PATH: "${PWD}"
+      DB_HOST: db
+      DB_DATABASE: "${DB_DATABASE:-sail}"
+      DB_USERNAME: "${DB_USERNAME:-sail}"
+      DB_PASSWORD: "${DB_PASSWORD:-password}"
+    volumes:
+      - ./server:/var/www/html
+    networks:
+      - sail
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:80"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    restart: unless-stopped
+
+  db:
+    image: "mysql/mysql-server:8.0"
+    container_name: mysql
+    ports:
+      - "${FORWARD_DB_PORT:-3306}:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: "${DB_PASSWORD:-password}"
+      MYSQL_ROOT_HOST: "%"
+      MYSQL_DATABASE: "${DB_DATABASE:-sail}"
+      MYSQL_USER: "${DB_USERNAME:-sail}"
+      MYSQL_PASSWORD: "${DB_PASSWORD:-password}"
+      MYSQL_ALLOW_EMPTY_PASSWORD: 1
+    volumes:
+      - "sail-mysql:/var/lib/mysql"
+      - "./server/vendor/laravel/sail/database/mysql/create-testing-database.sh:/docker-entrypoint-initdb.d/10-create-testing-database.sh"
+    networks:
+      - sail
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-p${DB_PASSWORD:-password}"]
+      retries: 3
       timeout: 5s
-      retries: 5
+      interval: 10s
+      start_period: 30s
+    restart: unless-stopped
+
+  phpmyadmin:
+    image: phpmyadmin/phpmyadmin
+    container_name: phpmyadmin
+    environment:
+      PMA_HOST: db
+      PMA_USER: root
+      PMA_PASSWORD: "${DB_PASSWORD:-password}"
+    ports:
+      - "8080:80"
+    networks:
+      - sail
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+networks:
+  sail:
+    driver: bridge
 
 volumes:
-  db_data:
-  laravel_vendor:
-  web_node_modules:
+  node_modules:
+    driver: local
+  sail-mysql:
+    driver: local

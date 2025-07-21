@@ -1,0 +1,9 @@
+# Ignore Docker Compose and app environment files
+.env
+server/.env
+web/.env
+
+# Do NOT ignore example env files
+!.env.example
+!server/.env.example
+!web/.env.example 
