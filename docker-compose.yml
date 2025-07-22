@@ -3,28 +3,21 @@ services:
     build:
       context: ./web
       dockerfile: Dockerfile
-    container_name: nextjs
     volumes:
       - ./web:/app
-      - /app/node_modules
+      - web_node_modules:/app/node_modules
       - /app/.next
     ports:
       - "3000:3000"
+    env_file:
+      - ./web/.env
     environment:
       NODE_ENV: development
       WATCHPACK_POLLING: true
     networks:
       - sail
     depends_on:
-      server:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3000"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
-    restart: unless-stopped
+      - server
 
   server:
     build:
@@ -32,85 +25,69 @@ services:
       dockerfile: Dockerfile
       args:
         WWWGROUP: "${WWWGROUP:-1000}"
-    container_name: laravel
     image: "sail-8.4/app"
     extra_hosts:
       - "host.docker.internal:host-gateway"
     ports:
       - "${APP_PORT:-8000}:80"
       - "${VITE_PORT:-5173}:${VITE_PORT:-5173}"
+    env_file:
+      - ./server/.env
     environment:
       WWWUSER: "${WWWUSER:-1000}"
       LARAVEL_SAIL: 1
       XDEBUG_MODE: "${SAIL_XDEBUG_MODE:-off}"
       XDEBUG_CONFIG: "${SAIL_XDEBUG_CONFIG:-client_host=host.docker.internal}"
       IGNITION_LOCAL_SITES_PATH: "${PWD}"
-      DB_HOST: db
-      DB_DATABASE: "${DB_DATABASE:-sail}"
-      DB_USERNAME: "${DB_USERNAME:-sail}"
-      DB_PASSWORD: "${DB_PASSWORD:-password}"
     volumes:
       - ./server:/var/www/html
     networks:
       - sail
     depends_on:
-      db:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:80"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
-    restart: unless-stopped
+      - db
 
   db:
     image: "mysql/mysql-server:8.0"
-    container_name: mysql
     ports:
-      - "${FORWARD_DB_PORT:-3306}:3306"
+      - 3306:3306
     environment:
-      MYSQL_ROOT_PASSWORD: "${DB_PASSWORD:-password}"
+      MYSQL_ROOT_PASSWORD: "${DB_PASSWORD}"
       MYSQL_ROOT_HOST: "%"
-      MYSQL_DATABASE: "${DB_DATABASE:-sail}"
-      MYSQL_USER: "${DB_USERNAME:-sail}"
-      MYSQL_PASSWORD: "${DB_PASSWORD:-password}"
+      MYSQL_DATABASE: "${DB_DATABASE}"
+      MYSQL_USER: "${DB_USERNAME}"
+      MYSQL_PASSWORD: "${DB_PASSWORD}"
       MYSQL_ALLOW_EMPTY_PASSWORD: 1
     volumes:
-      - "sail-mysql:/var/lib/mysql"
+      - "db-data:/var/lib/mysql"
       - "./server/vendor/laravel/sail/database/mysql/create-testing-database.sh:/docker-entrypoint-initdb.d/10-create-testing-database.sh"
     networks:
       - sail
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-p${DB_PASSWORD:-password}"]
+      test: ["CMD", "mysqladmin", "ping", "-p${DB_PASSWORD}"]
       retries: 3
       timeout: 5s
       interval: 10s
       start_period: 30s
-    restart: unless-stopped
 
   phpmyadmin:
     image: phpmyadmin/phpmyadmin
-    container_name: phpmyadmin
     environment:
       PMA_HOST: db
       PMA_USER: root
-      PMA_PASSWORD: "${DB_PASSWORD:-password}"
+      PMA_PASSWORD: "${DB_PASSWORD}"
     ports:
       - "8080:80"
     networks:
       - sail
     depends_on:
-      db:
-        condition: service_healthy
-    restart: unless-stopped
+      - db
 
 networks:
   sail:
     driver: bridge
 
 volumes:
-  node_modules:
+  web_node_modules:
     driver: local
-  sail-mysql:
+  db-data:
     driver: local
