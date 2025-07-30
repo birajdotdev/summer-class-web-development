@@ -1,5 +1,3 @@
-import Footer from "@/components/footer";
-import NavBar from "@/components/nav-bar";
 import QueryClientProviderWrapper from "@/components/query-client-provider-wrapper";
 import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "@/components/ui/sonner";
@@ -39,11 +37,7 @@ export default function RootLayout({
           disableTransitionOnChange
         >
           <QueryClientProviderWrapper>
-            <main className="flex min-h-screen flex-col">
-              <NavBar />
-              {children}
-              <Footer />
-            </main>
+            {children}
             <Toaster richColors />
           </QueryClientProviderWrapper>
         </ThemeProvider>
