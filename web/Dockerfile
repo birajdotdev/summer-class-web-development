@@ -1,12 +1,14 @@
-FROM node:18-alpine
+FROM node:lts-alpine
 
 WORKDIR /app
 
-COPY package.json ./
-RUN npm install
+RUN npm install -g bun
+
+COPY package.json bun.lock ./
+RUN bun install --frozen-lockfile
 
 COPY . .
 
 EXPOSE 3000
 
-CMD ["npm", "run", "dev"] 
+CMD ["bun", "run", "dev"]
